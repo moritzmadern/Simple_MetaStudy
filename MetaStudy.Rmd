@@ -1,0 +1,233 @@
+---
+title: "MetaStudy"
+output: html_document
+date: '2023-01-14'
+author: Moritz Madern 
+---
+
+
+This script compiles differential expression data from files different experiments (each provided in a standardized format) and performs meta-analysis on specified genes.
+
+```{r read in packages, echo=FALSE, warning=FALSE, message=FALSE}
+
+## read in packages
+library(ggplot2)
+library(tidyverse)
+library(RColorBrewer)
+library(rlist)
+library(poolr)
+
+```
+
+
+<br><br><br>
+
+## Specify parameters
+
+```{r specify parameters}
+
+## specify file path for datasets to read 
+filepath_datasets = "./Datasets"
+
+
+## specify table that defines the conditions (within those datasets) to look at
+filepath_tableConditions = "Condition_datasets_11012023.csv"
+
+
+## specify genes to be analyzed
+vector_geneNames = c("Cdc45", "Narf", "Stat1", "Abcd")
+
+```
+
+
+
+<br><br><br>
+
+## Read in datasets
+
+Read in conditions table:
+
+```{r read in tableConditions and specify some variables, echo=FALSE}
+
+## read in the tabe, then print it
+tableConditions = read.delim(filepath_tableConditions, header=TRUE, sep=",")
+tableConditions$dataset <- as.character(tableConditions$dataset)
+print(tableConditions)
+
+
+## add combined column (unique identifier)
+tableConditions$uniqueID = paste0("Dataset", tableConditions$dataset, "_", tableConditions$condition.number)
+
+## get unique dataset number vector
+vector_uniqueDatasetNumbers = unique(tableConditions$dataset) %>% as.character()
+
+
+## give unique color to each dataset
+colpal = colorRampPalette( c(brewer.pal(n=8, "Set1"), brewer.pal(n=8, "Set2")))
+DatasetCols = setNames(colpal(length(vector_uniqueDatasetNumbers)), nm=vector_uniqueDatasetNumbers)
+
+```
+
+Read in all datasets as specified by filepath_datasets:
+
+```{r read in each dataset and store in a list, warning=FALSE, echo=FALSE, message=FALSE}
+
+## read in all datasets
+files = list.files(filepath_datasets, full.names = TRUE)
+m = files %>% length()
+list_datasets = vector(mode="list")
+for (i in files){
+  print(i)
+  list_datasets[[i]] <- read.table(file = i, header = TRUE, sep = "\t")
+}         
+
+
+## extract dataset numbers from filenames. Rename list based on dataset numbers
+DatasetNumbers = sub(files, pattern=" .*", replacement = "") %>% sub(., pattern="[.]/Datasets/Dataset", replacement = "") 
+names(list_datasets) = DatasetNumbers
+
+
+## extract dataset descriptions, and name them by DatasetNumbers. Print dataframe that shows 1:1 relation
+DatasetDescription = sub(x=files, pattern=".* ", replacement = "") %>% sub(., pattern=".csv", replacement = "")
+names(DatasetDescription) = DatasetNumbers
+
+
+```
+
+Note: Input data needs required standard formatting! Here is an example:
+
+```{r print head of last dataset, warning=FALSE, echo=FALSE, message=FALSE}
+
+# print first few lines of last dataset (last file and not first sincefirst file was opened in Excel -> conversion of some numbers to dates. Never open your expression data in Excel!)
+head(list_datasets[[length(list_datasets)]])
+
+
+```
+
+
+
+Note: For Dataset 5, formatting of the .tsv file is somehow different which causes somehing weird to happen when reading into R. I found an automated workaround (i.e. without adapting the script), but this resulted in the loss of the very first row (Gene TSPAN6) for this dataset.
+
+```{r extract relevant data for plotting, warning=FALSE, echo=FALSE, message=FALSE}
+
+## initiate list
+list_of_dfs = list()
+
+## go over each pair of dataset and condition in tableConditions 
+for (i in 1:nrow(tableConditions)){
+  tableConditions_i <- tableConditions[i,]
+  dataset_i <- tableConditions_i$dataset
+  condition_i <- tableConditions_i$condition.number
+  dataset_condition_i <- tableConditions_i$uniqueID
+  
+  # extract dataset i
+  df_dataset <- list_datasets[[dataset_i]]
+  
+  ## select relevant column indices (if multiple match, take first one!)
+  ind_condition.foldChange <- grepl(names(df_dataset), pattern=paste0(condition_i,"[.]foldChange")) %>% which()
+  ind_condition.foldChange <- ind_condition.foldChange[1]
+  ind_condition.pValue <- grepl(names(df_dataset), pattern=paste0(condition_i,"[.]pValue")) %>% which()
+  ind_condition.pValue <- ind_condition.pValue[1]
+  
+  # Extract relevant columns and store in dataframe
+  df_i <- data.frame(DatasetNumber_Condition = dataset_condition_i,
+                     GeneName =  df_dataset$Gene.Name,
+                     foldChange = df_dataset[,ind_condition.foldChange],
+                     pValue = df_dataset[,ind_condition.pValue])
+  list_of_dfs[[i]] <- df_i
+}
+
+
+## merge to a single dataframe
+df_all <- do.call(what=rbind, args=list_of_dfs)
+
+
+## complete missing information (for unique combinations of GeneName and DatasetNumber_Condition)
+df_all_complete <- complete(data=df_all, DatasetNumber_Condition, GeneName)
+
+```
+
+
+<br><br><br>
+
+## Plot data for each specified gene
+
+Plots show foldChange vs experiment, points are colored by statistical significance. Note that experiments in which the respective gene was not quantified are not shown. Furthermore, for each gene, the individual p-values were combined to an overall p-value via Fisher's method (https://en.wikipedia.org/wiki/Fisher%27s_method), rounded to 6 digits. This method assumes that the individual p-values to be pooled are independent but test for the same Null hypothesis. If these assumptions are not met, ignore the combined p-value.
+
+```{r plot fc vs p-value, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.path='figures/', dev=c('png', 'pdf')}
+
+## initiate a list to be filled with foldChanges (including missing values) to be rearranged in wide-format. Could later be used to plot heatmaps. Currently not used
+list_wide <- vector(mode="list", length = length(vector_geneNames))
+names(list_wide) = vector_geneNames
+
+
+## initiate plot list
+plot_list = list()
+
+
+## go over each gene and plot fc vs p-value
+for (g in vector_geneNames){
+  
+  # select data for gene g
+  df_g <- df_all_complete %>% as.data.frame() %>% filter(GeneName == g)
+  rownames(df_g) <- df_g$DatasetNumber_Condition
+  
+  ## catch exception where gene is not found in any dataset
+  if (nrow(df_g) == 0){
+    paste0("Gene ", g, "could not be found in any dataset")
+    next()
+  }
+  
+  # reorder, then save fold changes in list. Next drop missing values
+  df_g <- df_g[tableConditions$uniqueID,]
+  list_wide[[g]] <- matrix(df_g$foldChange, ncol=1, dimnames = list(df_g$DatasetNumber_Condition, g))
+  bool_keep <- !is.na(df_g$foldChange)
+  df_g <- df_g[bool_keep,]
+  
+  ## create significance vector
+  df_g$significance <- cut(df_g$pValue, breaks=c(0, 0.001, 0.01, 0.05, 1.01), right=FALSE)
+  levels(df_g$significance) <- c("p-value < 0.001", "p-value < 0.01", "p-value < 0.05", "non-significant")
+  
+  
+  ## calculate combined p-value via Fisher's method (assuming independent p-values that test the same hypothesis)
+  p_combined_res <- poolr::fisher(p=df_g$pValue)
+  p_combined <- round(p_combined_res$p, digits=6)
+  
+  # plot data for gene g
+  xlim <- df_g$foldChange %>% abs() %>% max()
+  gg_singleGene <- ggplot(df_g) +
+                      geom_point(aes(x=foldChange, y=DatasetNumber_Condition, col=significance, pval=pValue), size=6) +
+                      scale_color_manual(values=c(rgb(red=255, green=50, blue=50, alpha=255, maxColorValue = 255),
+                                                  rgb(red=245, green=130, blue=0, alpha=255, maxColorValue = 255),
+                                                  rgb(red=250, green=200, blue=0, alpha=255, maxColorValue = 255),
+                                                  rgb(red=200, green=200, blue=200, alpha=255, maxColorValue = 255)),
+                                         drop=FALSE)+
+                      xlim(-xlim,xlim) +
+                      theme_bw() + ylab("Experiment") + xlab("Fold change [log2]") +
+                      geom_vline(xintercept=0, linetype=2, color="black") +
+                      ggtitle(label = g, subtitle = paste("combined p-value:", p_combined ))
+
+                      
+  
+  
+  gg_singleGene
+  plot_list <- list.append(plot_list, gg_singleGene)
+}
+
+
+```
+
+
+
+```{r plot the individual ggplots , echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.path='figures/', dev=c('png', 'pdf')}
+
+## plot the plots outside a loop
+plot_list
+
+```
+
+Note: Upon compiling the script to pdf, each plot is saved as pdf and png file in a folder called "figures" in your working directory.
+
+
+
+
