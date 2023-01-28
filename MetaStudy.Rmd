@@ -1,12 +1,14 @@
 ---
 title: "MetaStudy"
-output: html_document
+author: "Moritz Madern"
 date: '2023-01-14'
-author: Moritz Madern 
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 
-This script compiles differential expression data from files different experiments (each provided in a standardized format) and performs meta-analysis on specified genes.
+This script compiles differential expression data from files of different experiments (each provided in a standardized format & containing gene-wise FC vs p-values) and performs meta-analysis on specified genes. 
 
 ```{r read in packages, echo=FALSE, warning=FALSE, message=FALSE}
 
@@ -26,16 +28,16 @@ library(poolr)
 
 ```{r specify parameters}
 
-## specify file path for datasets to read 
+## specify file path to datasets to read in (all datasets should be located in the same folder)
 filepath_datasets = "./Datasets"
 
 
-## specify table that defines the conditions (within those datasets) to look at
+## specify file path to table that defines the conditions within those datasets of interest
 filepath_tableConditions = "Condition_datasets_11012023.csv"
 
 
-## specify genes to be analyzed
-vector_geneNames = c("Cdc45", "Narf", "Stat1", "Abcd")
+## specify genes to be analyzed (note that they will be concverted to capital letters to make pattern searching case-invariant)
+vector_geneNames = c("Cdc45", "eIF2A","Rpi7","Gapdh","Ncor1","Stat1")
 
 ```
 
@@ -105,7 +107,6 @@ head(list_datasets[[length(list_datasets)]])
 ```
 
 
-
 Note: For Dataset 5, formatting of the .tsv file is somehow different which causes somehing weird to happen when reading into R. I found an automated workaround (i.e. without adapting the script), but this resulted in the loss of the very first row (Gene TSPAN6) for this dataset.
 
 ```{r extract relevant data for plotting, warning=FALSE, echo=FALSE, message=FALSE}
@@ -142,7 +143,8 @@ for (i in 1:nrow(tableConditions)){
 df_all <- do.call(what=rbind, args=list_of_dfs)
 
 
-## complete missing information (for unique combinations of GeneName and DatasetNumber_Condition)
+## Set gene names to capital letters, then complete missing information (for unique combinations of GeneName and DatasetNumber_Condition)
+df_all$GeneName <- toupper(df_all$GeneName)
 df_all_complete <- complete(data=df_all, DatasetNumber_Condition, GeneName)
 
 ```
@@ -156,7 +158,7 @@ Plots show foldChange vs experiment, points are colored by statistical significa
 
 ```{r plot fc vs p-value, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.path='figures/', dev=c('png', 'pdf')}
 
-## initiate a list to be filled with foldChanges (including missing values) to be rearranged in wide-format. Could later be used to plot heatmaps. Currently not used
+## initiate a list to be filled with foldChanges (including missing values) to be rearranged in wide-format. Could be used to plot heatmaps. Currently not implemented in this script
 list_wide <- vector(mode="list", length = length(vector_geneNames))
 names(list_wide) = vector_geneNames
 
@@ -165,7 +167,8 @@ names(list_wide) = vector_geneNames
 plot_list = list()
 
 
-## go over each gene and plot fc vs p-value
+## go over each gene and plot fc vs p-value. Make sure the search is case-invariant by converting all letters to capital
+vector_geneNames <- toupper(vector_geneNames)
 for (g in vector_geneNames){
   
   # select data for gene g
@@ -218,7 +221,6 @@ for (g in vector_geneNames){
 ```
 
 
-
 ```{r plot the individual ggplots , echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.path='figures/', dev=c('png', 'pdf')}
 
 ## plot the plots outside a loop
@@ -226,7 +228,7 @@ plot_list
 
 ```
 
-Note: Upon compiling the script to pdf, each plot is saved as pdf and png file in a folder called "figures" in your working directory.
+Note: Upon compiling the script to pdf, each plot is saved as separate pdf and png file in the newly generated folder called "figures" in your working directory.
 
 
 
