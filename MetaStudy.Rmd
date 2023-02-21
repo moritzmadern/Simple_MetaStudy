@@ -18,6 +18,8 @@ library(tidyverse)
 library(RColorBrewer)
 library(rlist)
 library(poolr)
+library(superheat)
+library(gplots)
 
 ```
 
@@ -37,7 +39,16 @@ filepath_tableConditions = "Condition_datasets_11012023.csv"
 
 
 ## specify genes to be analyzed (note that they will be concverted to capital letters to make pattern searching case-invariant)
-vector_geneNames = c("Cdc45", "eIF2A","Rpi7","Gapdh","Ncor1","Stat1")
+vector_geneNames = c("Cdc45", "eIF2A","Rpi7","Gapdh","Ncor1","Stat1", "Gata3", "Stat4")
+
+
+## specify subset of those genes (from vector_geneNames) to be illustrated in a Heatmap. 
+vector_geneNames_heatmap = c("Cdc45","Ncor1","Stat1", "Stat4", "Gata3")
+
+
+## specify heatmap color scheme. Suppurted colorschemes are "viridis" and "redblue"
+heatmap_colorscheme = "redblue"
+
 
 ```
 
@@ -130,7 +141,7 @@ for (i in 1:nrow(tableConditions)){
   ind_condition.pValue <- grepl(names(df_dataset), pattern=paste0(condition_i,"[.]pValue")) %>% which()
   ind_condition.pValue <- ind_condition.pValue[1]
   
-  # Extract relevant columns and store in dataframe
+  # extract relevant columns and store in dataframe
   df_i <- data.frame(DatasetNumber_Condition = dataset_condition_i,
                      GeneName =  df_dataset$Gene.Name,
                      foldChange = df_dataset[,ind_condition.foldChange],
@@ -160,7 +171,7 @@ Plots show foldChange vs experiment, points are colored by statistical significa
 
 ## initiate a list to be filled with foldChanges (including missing values) to be rearranged in wide-format. Could be used to plot heatmaps. Currently not implemented in this script
 list_wide <- vector(mode="list", length = length(vector_geneNames))
-names(list_wide) = vector_geneNames
+names(list_wide) = toupper(vector_geneNames)
 
 
 ## initiate plot list
@@ -186,6 +197,11 @@ for (g in vector_geneNames){
   list_wide[[g]] <- matrix(df_g$foldChange, ncol=1, dimnames = list(df_g$DatasetNumber_Condition, g))
   bool_keep <- !is.na(df_g$foldChange)
   df_g <- df_g[bool_keep,]
+  
+  # convert DatasetNumber_Condition to factor
+  conditions_all = tableConditions$uniqueID
+  factorlevels_condition_g <- conditions_all[conditions_all %in% df_g$DatasetNumber_Condition]
+  df_g$DatasetNumber_Condition <- factor(df_g$DatasetNumber_Condition, levels = rev(factorlevels_condition_g))
   
   ## create significance vector
   df_g$significance <- cut(df_g$pValue, breaks=c(0, 0.001, 0.01, 0.05, 1.01), right=FALSE)
@@ -221,7 +237,7 @@ for (g in vector_geneNames){
 ```
 
 
-```{r plot the individual ggplots , echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.path='figures/', dev=c('png', 'pdf')}
+```{r plot the gene-wise information, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.path='figures/', dev=c('png', 'pdf')}
 
 ## plot the plots outside a loop
 plot_list
@@ -230,6 +246,131 @@ plot_list
 
 Note: Upon compiling the script to pdf, each plot is saved as separate pdf and png file in the newly generated folder called "figures" in your working directory.
 
+
+
+<br><br><br>
+
+## Plot Heatmap
+
+
+For selected genes, a heatmap is plotted that depicts fold changes. Missing values (i.e. NAs) are colored as grey.
+
+```{r write Heatmap function, echo = FALSE, message = FALSE, warning = FALSE}
+
+
+### Heatmap plot function ###
+heatmap_plot <- function(m, groups, legend_colors, samplenames, dendrogram="column", labrow="", bool_rowv=TRUE, bool_colv = TRUE, plot_path=NULL, title=""){
+  
+  # load packages
+  library(gplots)
+  
+  # create groups
+  names(colors) <- levels(groups)
+  
+  # replaces NAs with 0
+  m[is.na(m)] <- 0
+  colnames(m) <- samplenames
+  
+  # should rows be reordered
+  if (bool_rowv){
+    rowv <- as.dendrogram(hclust(dist(m)))
+  } else {
+    rowv <- FALSE
+  }
+  
+  # should columns be reordered
+  if (is.logical(bool_colv)){
+    if (bool_colv){
+      colv <- as.dendrogram(hclust(dist(t(m))))
+    } else {
+      colv <- FALSE
+    }
+  } else {
+    colv <- bool_colv
+  }
+  
+  # specify colors
+  if(is.null(legend_colors)){
+    sidecolors <- rep("white", times=ncol(m))
+  } else{
+    sidecolors <- legend_colors[groups]
+  }
+  
+  # create color palette
+  heatmap_pal <- colorRampPalette(rev(brewer.pal(11, "RdBu")))
+  
+  # plot heatmap for centered log2 intensities if centered
+  min_m <- min(m, na.rm=TRUE)
+  max_m <- max(m, na.rm=TRUE)
+  heatmap.2(m,         
+            Rowv = rowv,
+            Colv=colv,
+            labRow=labrow, margins=c(8,8), ColSideColors = sidecolors, trace="none",col=heatmap_pal(50),
+            breaks = seq(from=-2,to=2, length.out=51), 
+            symkey = F,
+            dendrogram=dendrogram, main=title)
+  
+  # save plot if specified 
+  if(!is.null(plot_path)){
+    pdf(file=plot_path, width = 6, height = 6)
+    heatmap.2(m,         
+              Rowv = rowv,
+              Colv=colv,
+              labRow=labrow, margins=c(8,8), ColSideColors = sidecolors, trace="none",col=heatmap_pal(50),
+              breaks = seq(from=-2,to=2, length.out=51), 
+              symkey = F,
+              dendrogram=dendrogram,
+              main=title)
+    dev.off()
+  }
+}
+
+```
+
+
+```{r plot heatmap, fig.align="center", echo = FALSE, message = FALSE, warning = FALSE, fig.path='figures/', dev=c('png', 'pdf'),fig.width=6}
+
+## from list_wide, select those genes to be visualized in heatmap as specified in the parameter section
+list_wide_heatmap <- list_wide[toupper(vector_geneNames_heatmap)]
+
+
+## condense to matrix
+m_heatmap <- do.call(what =cbind, args = list_wide_heatmap)
+
+
+## remove rows with only NAs
+bool_kick <- apply(is.na(m_heatmap), FUN=all, MARGIN = 1)
+m_heatmap <- m_heatmap[!bool_kick,]
+
+
+## change y-axis labels 
+# ylabels = sub(rownames(m_heatmap), pattern="_", replacement = "\n")
+# rownames(m_heatmap) = ylabels
+
+
+## prepare heatmap colors
+heatmap_pal_RdBU<- colorRampPalette(rev(brewer.pal(11, "RdBu")))
+if (heatmap_colorscheme == "viridis"){
+  heatmap_pal <- colorRampPalette(viridis::viridis(21))
+}
+if (heatmap_colorscheme == "redblue"){
+  heatmap_pal <- colorRampPalette(rev(brewer.pal(11, "RdBu")))
+}
+
+
+## plot heatmap
+heatmap.2(m_heatmap, margins=c(8,8), trace="none",col=heatmap_pal(30), na.color = "grey",
+            breaks = seq(from=-2,to=2, length.out=31),
+            symkey = F, scale="none",cexCol = 1, cexRow = 0.8,
+            dendrogram="none", Rowv=NA, Colv=NA, xlab="Gene Name", density.info = "none")
+
+
+
+```
+
+```{r}
+
+```
 
 
 
