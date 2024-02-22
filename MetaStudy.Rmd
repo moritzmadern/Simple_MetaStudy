@@ -107,18 +107,6 @@ names(DatasetDescription) = DatasetNumbers
 
 ```
 
-Note: Input data needs required standard formatting! Here is an example:
-
-```{r print head of last dataset, warning=FALSE, echo=FALSE, message=FALSE}
-
-# print first few lines of last dataset (last file and not first sincefirst file was opened in Excel -> conversion of some numbers to dates. Never open your expression data in Excel!)
-head(list_datasets[[length(list_datasets)]])
-
-
-```
-
-
-Note: For Dataset 5, formatting of the .tsv file is somehow different which causes somehing weird to happen when reading into R. I found an automated workaround (i.e. without adapting the script), but this resulted in the loss of the very first row (Gene TSPAN6) for this dataset.
 
 ```{r extract relevant data for plotting, warning=FALSE, echo=FALSE, message=FALSE}
 
