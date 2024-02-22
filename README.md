@@ -27,9 +27,9 @@ R workflow to perform a "simple meta analysis" on multiple manually curated bioi
 
 ![Screenshot](img/DETable_example.png)
 
-- A table with arbitrary naming (e.g. **Condition_datasets_11012023.csv** in the example) that details which conditions (i.e. pairwise comparisons) in which data sets should be included in the meta analysis. Should contain the two columns "dataset" and "condition number"; entries should match the numbering of file names and condition numbers within. Here is an example:
+- A table with arbitrary naming (e.g. **Condition_datasets_11012023.csv** in the above example) that details which conditions (i.e. pairwise comparisons) in which data sets should be included in the meta analysis. Should contain the two columns "dataset" and "condition number"; entries should match the numbering of file names and condition numbers within. Here is an example:
 
-![Screenshot](img/DETable_example.png)
+![Screenshot](img/DatasetConditionTable_example.png)
 
 
 
