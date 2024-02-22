@@ -8,7 +8,7 @@ R workflow to perform a "simple meta analysis" on multiple manually curated bioi
 
 ## Contents
 
-- **MetaStudy.Rmd** : R markdown script that performs the meta analysis for specified genes via Fisher's method, given input data files with specific formatting. The beginning of the script contains a parameter section where analysis settings are configured (e.g. file paths to input files; info on which genes to look at; etc.). The current parameter settings are specific to the example dataset (see below). Apart from the parameter section, the rest of the script should be left untouched. I recommend knitting the script to create a html report, which will further automatically save all created figures in pdf format in a separate folder.
+- **MetaStudy.Rmd** : R markdown script that performs the meta analysis for specified genes via Fisher's method, given input data tables with specific formatting. The beginning of the script contains a parameter section where analysis settings are configured (e.g. file paths to input files; info on which genes to look at; etc.). The current parameter settings are specific to the example dataset (see below). Apart from the parameter section, the rest of the script should be left untouched. I recommend knitting the script to create a html report, which will further automatically save all created figures in pdf format in a separate folder.
 
 - **example.pdf** : An example html report produced by running and knitting "MetaStudy.Rmd", using the example datasets as input. Check out this html report to see what the script does.
 
