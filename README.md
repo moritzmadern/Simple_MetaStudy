@@ -36,7 +36,7 @@ R workflow to perform a "simple meta analysis" on multiple manually curated bioi
 ## Data Output
 
 
-- A html report created when knitting the Rmd file.
+- A html report created when knitting the Rmd file (see "example.pdf").
 - various plots/figures, saved in the "figures" folder as both pdf and png files.
 
 
