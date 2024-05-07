@@ -71,6 +71,7 @@ print(tableConditions)
 ## add combined column (unique identifier)
 tableConditions$uniqueID = paste0("Dataset", tableConditions$dataset, "_", tableConditions$condition.number)
 
+
 ## get unique dataset number vector
 vector_uniqueDatasetNumbers = unique(tableConditions$dataset) %>% as.character()
 
@@ -123,7 +124,7 @@ for (i in 1:nrow(tableConditions)){
   # extract dataset i
   df_dataset <- list_datasets[[dataset_i]]
   
-  ## select relevant column indices (if multiple match, take first one!)
+  # select relevant column indices (if multiple match, take first one!)
   ind_condition.foldChange <- grepl(names(df_dataset), pattern=paste0(condition_i,"[.]foldChange")) %>% which()
   ind_condition.foldChange <- ind_condition.foldChange[1]
   ind_condition.pValue <- grepl(names(df_dataset), pattern=paste0(condition_i,"[.]pValue")) %>% which()
@@ -174,7 +175,7 @@ for (g in vector_geneNames){
   df_g <- df_all_complete %>% as.data.frame() %>% filter(GeneName == g)
   rownames(df_g) <- df_g$DatasetNumber_Condition
   
-  ## catch exception where gene is not found in any dataset
+  # catch exception where gene is not found in any dataset
   if (nrow(df_g) == 0){
     paste0("Gene ", g, "could not be found in any dataset")
     next()
@@ -195,8 +196,7 @@ for (g in vector_geneNames){
   df_g$significance <- cut(df_g$pValue, breaks=c(0, 0.001, 0.01, 0.05, 1.01), right=FALSE)
   levels(df_g$significance) <- c("p-value < 0.001", "p-value < 0.01", "p-value < 0.05", "non-significant")
   
-  
-  ## calculate combined p-value via Fisher's method (assuming independent p-values that test the same hypothesis)
+  # calculate combined p-value via Fisher's method (assuming independent p-values that test the same hypothesis)
   p_combined_res <- poolr::fisher(p=df_g$pValue)
   p_combined <- round(p_combined_res$p, digits=6)
   
@@ -329,11 +329,6 @@ m_heatmap <- do.call(what =cbind, args = list_wide_heatmap)
 ## remove rows with only NAs
 bool_kick <- apply(is.na(m_heatmap), FUN=all, MARGIN = 1)
 m_heatmap <- m_heatmap[!bool_kick,]
-
-
-## change y-axis labels 
-# ylabels = sub(rownames(m_heatmap), pattern="_", replacement = "\n")
-# rownames(m_heatmap) = ylabels
 
 
 ## prepare heatmap colors
